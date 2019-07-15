@@ -1,107 +1,119 @@
 import React from 'react';
-// import { Redirect } from 'react-router';
-// import url from 'url';
+import GoogleAuth from '../../lib/GoogleAuth';
 
-
-interface IState {
-    sharedAlbumsList?: {
-        sharedAlbums?: Album[],
-        nextPageToken?: string,
-    },
-    titleText: string,
-}
-interface Album {
-    "id": string,
-    "title": string,
-    "productUrl": string,
-    "isWriteable": boolean,
-    "shareInfo"?: any,
-    "mediaItemsCount": string,
-    "coverPhotoBaseUrl": string,
-    "coverPhotoMediaItemId": string
-}
-export default class extends React.Component {
-    auth?: {
-        access_token: string,
-        token_type: string,
-    }
+export default class extends React.Component<IProps, IState> {
     state: IState = {
         titleText: '',
+        error: false,
+        loading: true,
     }
     componentDidMount() {
-        const params: { [key: string]: string } = {}
-        window.location.hash.substring(1).split('&').forEach((str, idx) => {
-            const [key, value] = str.split('=')
-            params[key] = value;
-        })
-        console.log(params);
-        this.auth = {
-            access_token: params['access_token'],
-            token_type: params['token_type'],
-        }
-        this.getSharedAlbumsList();
+        this.withLoading(this.getSharedAlbumsList.bind(this));
     }
     private async getSharedAlbumsList() {
-        if (!this.auth) return;
-        const res = await fetch("https://photoslibrary.googleapis.com/v1/sharedAlbums", {
+        const json = await this.props.auth.exec({
+            url: "https://photoslibrary.googleapis.com/v1/sharedAlbums",
             method: "GET",
-            headers: {
-                Authorization: [this.auth.token_type, this.auth.access_token].join(' '),
-                Origin: window.location.protocol + "//" + window.location.host
-            }
-        })
-        const json = await res.json()
+            scopes: ['https://www.googleapis.com/auth/photoslibrary'],
+            body: {},
+        });
         console.log(json)
         this.setState({ sharedAlbumsList: json });
     }
+    async withLoading(fn: () => Promise<any>) {
+        try {
+            this.setState({ loading: true })
+            await fn();
+            this.setState({ error: false, loading: false })
+        } catch (error) {
+            this.setState({ error: true, loading: false });
+            throw error;
+        }
+    }
     async createSharedAlbum() {
-        if (!this.auth) return;
-        if (!this.state.titleText) return;
         const title = this.state.titleText;
         this.setState({ titleText: '' });
-        const headers = {
-            Authorization: [this.auth.token_type, this.auth.access_token].join(' '),
-            Origin: window.location.protocol + "//" + window.location.host
-        }
-        const createResponse = await fetch('https://photoslibrary.googleapis.com/v1/albums', {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-                album: { title }
-            }),
-        });
-        const json = await createResponse.json();
-        console.log(json)
 
-        if (!json.id) return Error('cannot create album');
-        const share = await fetch('https://photoslibrary.googleapis.com/v1/albums/' + json.id + ':share', {
+        // アルバムの作成
+        const createResult = await this.props.auth.exec({
+            url: "https://photoslibrary.googleapis.com/v1/albums",
             method: "POST",
-            headers,
-            body: JSON.stringify({}),
-        })
-        console.log(share)
-        await this.getSharedAlbumsList();
+            scopes: ['https://www.googleapis.com/auth/photoslibrary'],
+            body: {
+                album: { title }
+            },
+        });
+        console.log(createResult);
+        if (!createResult.id) throw new Error('cannot create album');
+
+        // アルバムの共有
+        const shareResult = await this.props.auth.exec({
+            url: 'https://photoslibrary.googleapis.com/v1/albums/' + createResult.id + ':share',
+            method: "POST",
+            scopes: ['https://www.googleapis.com/auth/photoslibrary.sharing'],
+            body: {},
+        });
+        console.log(shareResult)
+
+        // 一覧情報の更新
+        this.getSharedAlbumsList();
     }
     render() {
-        // if (!this.state.auth) return (<Redirect to="/" />)
+        if (this.state.loading) return (<h1>loading</h1>);
+        if (this.state.error) return (
+            <div>
+                <p>Google認証に失敗しました。再認証してください</p>
+                <button onClick={e => { this.withLoading(this.getSharedAlbumsList.bind(this)) }}>再認証</button>
+            </div>
+        );
         return (
             <div>
                 <h2>共有アルバムの新規作成</h2>
-                <p>タイトル<input type="text" onChange={e => this.setState({ titleText: e.target.value })} value={this.state.titleText} /></p>
-                <button onClick={e => this.createSharedAlbum()}>新規作成</button>
+                タイトル<input type="text" onChange={e => this.setState({ titleText: e.target.value })} value={this.state.titleText} required />
+                <button onClick={e => this.withLoading(this.createSharedAlbum.bind(this))}>新規作成</button>
                 <hr />
                 <h2>共有アルバム一覧</h2>
                 {(() => {
                     if (!this.state.sharedAlbumsList) return;
                     if (!this.state.sharedAlbumsList.sharedAlbums) return;
-                    return this.state.sharedAlbumsList.sharedAlbums.filter((album: Album) => album.shareInfo).map((album: Album) => (
-                        <div key={album.id} style={{ textAlign: "left" }}>
-                            <h3>タイトル: {album.title}</h3>
-                            <label>shareToken:<input type="text" defaultValue={album.shareInfo.shareToken} readOnly /></label>
+                    return this.state.sharedAlbumsList.sharedAlbums.map((album: Album) => (
+                        <div key={album.id}>
+                            <a href={album.shareInfo ? album.shareInfo.shareableUrl : album.productUrl}>{album.title}</a>
+                            {album.shareInfo ? <input type="text" defaultValue={album.shareInfo.shareToken} readOnly /> : ""}
                         </div>
                     ));
                 })()}
             </div>
         )
     }
+}
+interface IProps {
+    auth: GoogleAuth
+}
+
+interface IState {
+    sharedAlbumsList?: {
+        sharedAlbums?: Album[],
+        nextPageToken?: string,
+        prevPageToken?: string,
+    }
+    titleText: string
+    error: boolean
+    loading: boolean
+}
+interface Album {
+    "id": string,
+    "title": string,
+    "productUrl": string,
+    "isWriteable": boolean,
+    "shareInfo"?: ShareInfo,
+    "mediaItemsCount": string,
+    "coverPhotoBaseUrl": string,
+    "coverPhotoMediaItemId": string
+}
+interface ShareInfo {
+    "sharedAlbumOptions": any,
+    "shareableUrl": string,
+    "shareToken": string,
+    "isJoined": boolean
 }
