@@ -1,17 +1,15 @@
 import React from 'react';
-import querystring from 'querystring'
+import GoogleAuth from '../lib/GoogleAuth';
 
 export default class extends React.Component<IProps> {
     componentDidMount() {
-        const query: querystring.ParsedUrlQuery = querystring.parse(window.location.hash.substring(1), '&', '=')
-        if (window.opener) {
-            window.opener.postMessage(query);
-        }
-        window.close()
+        // cookieにトークン情報を設定
+        GoogleAuth.setCookieFromAuth();
+        window.close();
     }
     render() {
         return (
-            <h1>This window will close automatically</h1>
+            <p>This window will close automatically</p>
         )
     }
 }
