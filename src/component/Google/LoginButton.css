@@ -1,0 +1,28 @@
+#GoogleButton {
+    display: inline-block;
+}
+
+#GoogleButton button {
+    width: 191px;
+    height: 46px;
+    padding:0;
+    border:none;
+}
+#GoogleButton button.dark {
+    background: url('../../images/google_signin_buttons/web/1x/btn_google_signin_dark_normal_web.png');
+}
+#GoogleButton button.dark:focus {
+    background: url('../../images/google_signin_buttons/web/1x/btn_google_signin_dark_focus_web.png');
+}
+#GoogleButton button.dark:active {
+    background: url('../../images/google_signin_buttons/web/1x/btn_google_signin_dark_pressed_web.png');
+}
+#GoogleButton button.light {
+    background: url('../../images/google_signin_buttons/web/1x/btn_google_signin_light_normal_web.png');
+}
+#GoogleButton button.light:focus {
+    background: url('../../images/google_signin_buttons/web/1x/btn_google_signin_light_focus_web.png');
+}
+#GoogleButton button.light:active {
+    background: url('../../images/google_signin_buttons/web/1x/btn_google_signin_light_pressed_web.png');
+}
