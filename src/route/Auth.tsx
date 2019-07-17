@@ -1,5 +1,5 @@
 import React from 'react';
-import GoogleAuth from '../lib/GoogleAuth';
+import * as GoogleAuth from '../lib/GoogleAuth';
 
 export default class extends React.Component<IProps> {
     componentDidMount() {

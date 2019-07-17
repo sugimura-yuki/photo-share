@@ -1,11 +1,24 @@
 import querystring from 'querystring'
 import cookie from 'js-cookie';
 
-export default {
-    exec, hasAuth, setCookieFromAuth
-};
-
-async function exec(param: ExecParam): Promise<any> {
+export interface Album {
+    "id": string,
+    "title": string,
+    "productUrl": string,
+    "isWriteable": boolean,
+    "shareInfo"?: ShareInfo,
+    "mediaItemsCount": string,
+    "coverPhotoBaseUrl": string,
+    "coverPhotoMediaItemId": string
+}
+export interface ShareInfo {
+    "sharedAlbumOptions": any,
+    "shareableUrl": string,
+    "shareToken": string,
+    "isJoined": boolean
+}
+export default {}
+export async function exec(param: ExecParam, bodyToJson = true): Promise<any> {
     try {
         // 認証必要チェック
         if (!hasAuth(param.scopes)) {
@@ -15,11 +28,11 @@ async function exec(param: ExecParam): Promise<any> {
         // API 実行
         const response = await fetch(param.url, {
             method: param.method,
-            headers: {
+            headers: Object.assign({
                 Authorization: [cookie.get('token_type'), cookie.get('access_token')].join(' '),
                 Origin: window.location.protocol + '//' + window.location.host,
-            },
-            body: param.method === 'POST' ? JSON.stringify(param.body || {}) : null,
+            }, param.headers),
+            body : param.body
         });
 
         // statusチェック
@@ -27,13 +40,16 @@ async function exec(param: ExecParam): Promise<any> {
             throw new Error('API status NOT 200');
         }
 
-        // JSONデコードしてから返却
-        return response.json();
+        try {
+            // JSONデコードしてから返却
+            return await response.clone().json();
+        } catch (error) {
+            // JSON形式ではなかった場合
+            return await response.clone().text();
+        }
     } catch (error) {
         // 実行失敗時にcookieを削除
-        cookie.remove('access_token');
-        cookie.remove('scope');
-        cookie.remove('token_type');
+        clearAuthCookie();
         throw error;
     }
 }
@@ -41,7 +57,7 @@ async function exec(param: ExecParam): Promise<any> {
 /**
  * Google認証のリダイレクトパラメータからアクセストークンを取得し、cookieに設定する。
  */
-function setCookieFromAuth(): void {
+export function setCookieFromAuth(): void {
     const query: querystring.ParsedUrlQuery = querystring.parse(window.location.hash.substring(1), '&', '=');
 
     if (typeof (query.scope) !== 'string') return;
@@ -55,8 +71,13 @@ function setCookieFromAuth(): void {
     cookie.set('access_token', query.access_token, { expires: maxAge });
     cookie.set('token_type', query.token_type, { expires: maxAge });
 }
+export function clearAuthCookie(): void {
+    cookie.remove('access_token');
+    cookie.remove('scope');
+    cookie.remove('token_type');
+}
 
-function hasAuth(scopes: string[]): boolean {
+export function hasAuth(scopes: string[]): boolean {
     const [access_token, auth_scope, token_type] = [cookie.get('access_token'), cookie.get('scope'), cookie.get('token_type')];
     if (!access_token) return false;
     if (!auth_scope) return false;
@@ -68,7 +89,7 @@ function hasAuth(scopes: string[]): boolean {
  * Google認証ポップアップを表示し、認証情報をcookieにセット
  * @param scopes 
  */
-async function auth(scopes: string[]): Promise<void> {
+export async function auth(scopes: string[]): Promise<void> {
     // 認証用ポップアップの設定
     const query = querystring.stringify({
         client_id: process.env.REACT_APP_GOOGLE_API_CLIENT_ID,
@@ -113,5 +134,7 @@ interface ExecParam {
     url: string
     scopes: string[]
     method: "GET" | "POST"
-    body?: { [key: string]: any }
+    body?: string | Blob | ArrayBufferView | ArrayBuffer | FormData | URLSearchParams | ReadableStream<Uint8Array> | null | undefined
+    headers?: Record<string, string>
 }
+
